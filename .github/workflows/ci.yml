@@ -93,45 +93,49 @@ jobs:
     - name: Extract bundle and run
       run: |
         set -e
-        # find any .tgz bundle we downloaded
-        ARTFILE=$(ls ./downloaded/*.tgz 2>/dev/null | head -n1 || true)
-        if [ -n "$ARTFILE" ]; then
-          echo "Found bundle: $ARTFILE"
-          mkdir -p ./downloaded/extracted
-          tar -xzf "$ARTFILE" -C ./downloaded/extracted || { echo 'Failed to extract bundle'; exit 1; }
-          cd ./downloaded/extracted || exit 1
-        else
-          echo "No bundle .tgz found; falling back to ./downloaded"
-          cd ./downloaded || exit 1
-        fi
-
-        echo "Contents of execution dir:"
-        ls -la || true
-
-        # If a package.json exists, install deps and prefer npm start
-        if [ -f package.json ]; then
-          echo 'Installing dependencies (npm ci)...'
-          npm ci --prefer-offline --no-audit --no-fund || { echo 'npm ci failed'; exit 1; }
-
-          if npm run | grep -q "start"; then
-            echo 'Running: npm start'
-            npm start
-          else
-            # fallback to index.js
-            if [ -f index.js ]; then
-              echo 'Running: node index.js'
-              node index.js
-            else
-              echo 'No start script or index.js found.'
-              exit 2
+        # iterate over all .tgz bundles we downloaded (if any)
+        # note: enable nullglob behavior in bash where available
+        if command -v bash >/dev/null 2>&1; then
+          # use a bash subshell array to capture matches
+          bash -c '
+            shopt -s nullglob || true
+            TGZ_FILES=(./downloaded/*.tgz)
+            if [ ${#TGZ_FILES[@]} -gt 0 ] && [ -f "${TGZ_FILES[0]}" ]; then
+              echo "Found ${#TGZ_FILES[@]} bundle(s)"
+              i=0
+              for ARTFILE in "${TGZ_FILES[@]}"; do
+                echo "Processing bundle: $ARTFILE"
+                DIR=./downloaded/extracted-$(printf "%02d" "$i")
+                mkdir -p "$DIR"
+                tar -xzf "$ARTFILE" -C "$DIR" || { echo "Failed to extract $ARTFILE"; exit 1; }
+                ( 
+                  cd "$DIR" || exit 1
+                  echo "Contents of $DIR:"
+                  ls -la || true
+                  if [ -f package.json ]; then
+                    echo "Installing dependencies (npm ci)..."
+                    npm ci --prefer-offline --no-audit --no-fund || { echo "npm ci failed in $DIR"; exit 1; }
+                    if npm run | grep -q "start"; then
+                      echo "Running: npm start in $DIR"
+                      npm start
+                    elif [ -f index.js ]; then
+                      echo "Running: node index.js in $DIR"
+                      node index.js
+                    else
+                      echo "No start script or index.js in $DIR"
+                      exit 2
+                    fi
+                  else
+                    if [ -f index.js ]; then
+                      node index.js
+                    else
+                      echo "No package.json or index.js in $DIR"
+                      exit 2
+                    fi
+                  fi
+                )
+                i=$((i+1))
+              done
             fi
-          fi
-        else
-          # no package.json: try to run index.js directly from downloaded root
-          if [ -f index.js ]; then
-            node index.js
-          else
-            echo 'No package.json or index.js found in artifact.'
-            exit 2
-          fi
+          '
         fi
