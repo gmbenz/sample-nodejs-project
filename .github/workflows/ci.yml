@@ -9,8 +9,8 @@ on:
 jobs:
   build:
     # Only run when not a forked pull request
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
-    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request == null || github.event.pull_request.head.repo.fork == false }}
+    runs-on: [ gmbenz-local ]
 
     strategy:
       matrix:
