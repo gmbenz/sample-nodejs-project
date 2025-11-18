@@ -33,10 +33,12 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
 
-    - run: npm install
+    - name: Install dependencies
+      run: npm install
     - name: Build
       run: npm run build || echo "No build script defined; skipping"
-    - run: npm test
+    - name: Run tests
+      run: npm test
     - name: Ensure artifact directories exist
       if: always()
       run: |
