@@ -1,5 +1,6 @@
 function add(a, b) {
-  return a + b;
+  // Intentional bug: off-by-one error to cause tests to fail
+  return a + b + 1;
 }
 
 module.exports = { add };
