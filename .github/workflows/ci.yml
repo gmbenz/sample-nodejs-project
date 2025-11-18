@@ -10,7 +10,7 @@ jobs:
   build:
     # Only run when not a forked pull request
     if: ${{ github.event.pull_request == null || github.event.pull_request.head.repo.fork == false }}
-    runs-on: [ gmbenz-local ]
+    runs-on: [gmbenz-local]
 
     strategy:
       matrix:
@@ -44,3 +44,38 @@ jobs:
           build
         # keep artifacts for 30 days (adjust as needed)
         retention-days: 30
+
+  run-local:
+    name: Download & run artifacts on local runner
+    needs: build
+    runs-on: [gmbenz-local]
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+
+    steps:
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Download artifact for this Node version
+      uses: actions/download-artifact@v4
+      with:
+        name: sample-nodejs-project-${{ matrix.node-version }}-run-${{ github.run_id }}
+        path: ./downloaded
+
+    - name: List downloaded files
+      run: |
+        echo "Contents of ./downloaded:"
+        ls -la ./downloaded || true
+
+    - name: Run downloaded artifact
+      run: |
+        # example: run package.json start if present, else run index.js
+        if [ -f ./downloaded/package.json ]; then
+            npm ci
+            npm start
+        else
+            node $(find ./downloaded -maxdepth 1 -type f -name 'index.js' | head -n1)
+        fi
