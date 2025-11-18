@@ -17,7 +17,16 @@ jobs:
         node-version: [16.x, 18.x, 20.x]
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository via SSH
+      uses: actions/checkout@v4
+      with:
+        # Uses the private key stored in repo secrets as SSH auth
+        # Add your private key to Repository Settings -> Secrets as 'SSH_PRIVATE_KEY'
+        ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # Ensure GitHub's host key is known; you can include additional hosts if needed
+        ssh-known-hosts: github.com
+        # Avoid persisting the PAT in the repo's git config; use SSH only
+        persist-credentials: false
 
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
