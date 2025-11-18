@@ -24,6 +24,13 @@ jobs:
 
     - run: npm install
     - run: npm test
+    - name: Ensure artifact directories exist
+      if: always()
+      run: |
+        mkdir -p build coverage
+        # Create small placeholder files so upload-artifact never fails for empty directories
+        echo "placeholder" > build/.placeholder
+        echo "placeholder coverage" > coverage/coverage.txt
     - name: Upload artifacts
       if: always()
       uses: actions/upload-artifact@v4
