@@ -24,3 +24,14 @@ jobs:
 
     - run: npm install
     - run: npm test
+    - name: Upload artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        # include node-version and run id so matrix jobs don't overwrite each other
+        name: sample-nodejs-project-${{ matrix.node-version }}-run-${{ github.run_id }}
+        path: |
+          coverage
+          build
+        # keep artifacts for 30 days (adjust as needed)
+        retention-days: 30
