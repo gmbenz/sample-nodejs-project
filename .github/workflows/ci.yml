@@ -40,9 +40,11 @@ jobs:
       run: |
         ART=artifact-${{ matrix.node-version }}-run-${{ github.run_id }}.tgz
         echo "Creating $ART (excluding node_modules)"
-        # include build, coverage, package.json if present; tolerate missing files
+        # include files needed to run the project: package.json, package-lock.json,
+        # index.js, common source dirs (src, lib), plus build/ and coverage/
+        # exclude node_modules to keep artifact small; consumer will run `npm ci`.
         tar --warning=no-file-changed -czf "$ART" --ignore-failed-read \
-          build coverage package.json || true
+          package.json package-lock.json index.js src lib build coverage || true
         ls -lh "$ART" || true
     - name: Upload artifact bundle
       if: always()
@@ -77,10 +79,10 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
 
-    - name: Download artifact for this Node version
+    - name: Download bundle artifact for this Node version
       uses: actions/download-artifact@v4
       with:
-        name: sample-nodejs-project-${{ matrix.node-version }}-run-${{ github.run_id }}
+        name: sample-nodejs-project-${{ matrix.node-version }}-bundle-${{ github.run_id }}
         path: ./downloaded
 
     - name: List downloaded files
@@ -88,12 +90,48 @@ jobs:
         echo "Contents of ./downloaded:"
         ls -la ./downloaded || true
 
-    - name: Run downloaded artifact
+    - name: Extract bundle and run
       run: |
-        # example: run package.json start if present, else run index.js
-        if [ -f ./downloaded/package.json ]; then
-            npm ci
-            npm start
+        set -e
+        # find any .tgz bundle we downloaded
+        ARTFILE=$(ls ./downloaded/*.tgz 2>/dev/null | head -n1 || true)
+        if [ -n "$ARTFILE" ]; then
+          echo "Found bundle: $ARTFILE"
+          mkdir -p ./downloaded/extracted
+          tar -xzf "$ARTFILE" -C ./downloaded/extracted || { echo 'Failed to extract bundle'; exit 1; }
+          cd ./downloaded/extracted || exit 1
         else
-            node $(find ./downloaded -maxdepth 1 -type f -name 'index.js' | head -n1)
+          echo "No bundle .tgz found; falling back to ./downloaded"
+          cd ./downloaded || exit 1
+        fi
+
+        echo "Contents of execution dir:"
+        ls -la || true
+
+        # If a package.json exists, install deps and prefer npm start
+        if [ -f package.json ]; then
+          echo 'Installing dependencies (npm ci)...'
+          npm ci --prefer-offline --no-audit --no-fund || { echo 'npm ci failed'; exit 1; }
+
+          if npm run | grep -q "start"; then
+            echo 'Running: npm start'
+            npm start
+          else
+            # fallback to index.js
+            if [ -f index.js ]; then
+              echo 'Running: node index.js'
+              node index.js
+            else
+              echo 'No start script or index.js found.'
+              exit 2
+            fi
+          fi
+        else
+          # no package.json: try to run index.js directly from downloaded root
+          if [ -f index.js ]; then
+            node index.js
+          else
+            echo 'No package.json or index.js found in artifact.'
+            exit 2
+          fi
         fi
